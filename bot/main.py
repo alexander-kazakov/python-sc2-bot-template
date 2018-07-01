@@ -16,7 +16,14 @@ class MyBot(sc2.BotAI):
         if iteration == 0:
             await self.chat_send(f"Name: {self.NAME}")
 
-        await self.distribute_workers()  # in sc2/bot_ai.p
+
+        await self.log_info(iteration, iteration)
+
+        if len(self.known_enemy_units) > 0:
+            await self.attack(iteration)
+        else:
+            await self.distribute_workers()  # in sc2/bot_ai.p
+
         await self.build_workers()
         await self.build_assimilator()
         await self.build_pylons()
@@ -37,13 +44,19 @@ class MyBot(sc2.BotAI):
 
     async def build_assimilator(self):
         for nexus in self.units(NEXUS).ready:
-            print("n")
             vaspenes = self.state.vespene_geyser.closer_than(10.0, nexus)
-            print("z")
             for vaspene in vaspenes:
-                print("a")
                 if (not self.units(ASSIMILATOR).closer_than(1.0, vaspene).exists) and self.can_afford(ASSIMILATOR):
-                    print("b")
                     worker = self.select_build_worker(vaspene.position)
                     if not (worker is None):
                         await self.do(worker.build(ASSIMILATOR, vaspene))
+
+    async def attack(self, iteration):
+        self.log_info(iteration, len(self.known_enemy_units))
+        if len(self.known_enemy_units) > 0:
+            for s in self.units(PROBE).idle:
+                await self.do(s.attack(self.known_enemy_units.first))
+
+    async def log_info(self, iteration, info):
+        if (iteration % 100 == 0):
+            await self.chat_send(f"Info: {info}")
