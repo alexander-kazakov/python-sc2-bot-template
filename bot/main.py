@@ -16,10 +16,10 @@ class MyBot(sc2.BotAI):
 
         await self.distribute_workers()  # in sc2/bot_ai.p
 
-        await self.build_workers()
-
-    async def build_workers(self):
-        for nexus in self.units(NEXUS).ready.noqueue:
+    #     await self.build_workers()
+    #
+    # async def build_workers(self):
+    #     for nexus in self.units(NEXUS).ready.noqueue:
     #         if self.can_afford(probe):
     #             await self.do(nexus.train(PROBE))
     #
