@@ -1,12 +1,9 @@
 from importlib import reload
-import argparse
-import sys
-import asyncio
 
 import json
 
 import sc2
-from sc2 import run_game, maps, Race, Difficulty
+from sc2 import maps, Race, Difficulty
 from sc2.player import Bot, Computer, Human
 
 from bot import main_bot

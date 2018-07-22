@@ -4,10 +4,9 @@ from helpers import load_bot_name
 
 import sc2
 
-from sc2 import run_game, maps, Race, Difficulty
-from sc2.player import Bot, Computer
-from sc2.constants import COMMANDCENTER, SUPPLYDEPOT, BARRACKS, FACTORY, STARPORT, ENGINEERINGBAY, ARMORY, REFINERY
+from sc2.constants import COMMANDCENTER, SUPPLYDEPOT, BARRACKS, FACTORY, STARPORT, ENGINEERINGBAY, ARMORY, REFINERY, ORBITALCOMMAND
 from sc2.constants import SCV, MARINE, SIEGETANK, MEDIVAC, VIKINGFIGHTER
+from sc2.constants import UPGRADETOORBITAL_ORBITALCOMMAND, CALLDOWNMULE_CALLDOWNMULE
 
 import math
 
@@ -23,11 +22,6 @@ import math
 
 # Change so that it builds if no queue
 #  for factory in self.units(FACTORY).ready.noqueue:
-
-# Upgrading to orbital command
-# if self.units(UnitTypeId.BARRACKS).ready.exists and self.can_afford(UnitTypeId.BARRACKS): # we dont check if we can afford because the price for morphing units was/is bugged - doesn't work with "await self.do()"
-#            for cc in self.units(COMMANDCENTER).idle: # .idle filters idle command centers
-#                self.combinedActions.append(cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND))
 
 # Deploy MULEs
 # # manage orbital energy and drop mules
@@ -47,6 +41,7 @@ import math
 # HOW TO DEFINE BUILDING LOCATION
 #                         p = cc.position.towards_with_random_angle(self.game_info.map_center, 16)
 #                        await self.build(FACTORY, near=p)
+
 
 class MyBot(sc2.BotAI):
     MAX_SIMULATANEOUS_SUPPLY_DEPOTS_BUILDING = 2
@@ -96,9 +91,12 @@ class MyBot(sc2.BotAI):
     async def log(self, message):
         await self.chat_send(f"#{self.time_str()} - {message}")
 
+    def get_command_centers(self):
+        return self.units.of_type([COMMANDCENTER, ORBITALCOMMAND])
+
     async def build_structure_try(self, structure):
-        if self.can_afford(structure) and self.dependencies_satisfied(structure) and self.units(COMMANDCENTER).ready.exists:
-            await self.build(structure, near=self.units(COMMANDCENTER).ready.first)
+        if self.can_afford(structure) and self.dependencies_satisfied(structure) and self.get_command_centers().ready.exists:
+            await self.build(structure, near=self.get_command_centers().ready.first)
             await self.log(f"Building {structure.name}")
 
     async def train_unit_try(self, structure, unit):
@@ -106,7 +104,7 @@ class MyBot(sc2.BotAI):
             await self.do(structure.train(unit))
             await self.log(f"Training {unit.name}")
 
-    def add_on_name(self,structure):
+    def add_on_name(self, structure):
         if structure.add_on_tag != 0:
             return self.units.find_by_tag(structure.add_on_tag).name
         else:
@@ -129,7 +127,7 @@ class MyBot(sc2.BotAI):
                 if self.can_afford(COMMANDCENTER) and (not self.already_pending(COMMANDCENTER)) and (len(self.units(COMMANDCENTER)) < 2):
                     await self.expand_now()
                     await self.log("Build phase - Expanding")
-                if (len(self.units(COMMANDCENTER)) >= 2):
+                if (len(self.get_command_centers()) >= 2):
                     await self.proceed_to_next_build_order_step()
             else:  # Normal structure building here
                 await self.build_if_doesnt_exist(what_to_build)
@@ -148,8 +146,14 @@ class MyBot(sc2.BotAI):
 
     async def build_workers(self):
         if self.units(SCV).amount < 70:
-            for command_center in self.units(COMMANDCENTER).ready.noqueue:
+            for command_center in self.get_command_centers().ready.noqueue:
                 await self.train_unit_try(command_center, SCV)
+
+        for oc in self.units(ORBITALCOMMAND).filter(lambda x: x.energy >= 50):
+            mfs = self.state.mineral_field.closer_than(10, oc)
+            if mfs:
+                mf = max(mfs, key=lambda x: x.mineral_contents)
+                self.do(oc(CALLDOWNMULE_CALLDOWNMULE, mf))
 
     async def build_supply_depots(self):
         if (self.supply_left < self.SUPPLY_LEFT_TO_BUILD_DEPOT and
@@ -160,7 +164,7 @@ class MyBot(sc2.BotAI):
     async def build_refinery(self):
         if ((self.vespene < 100) and (not self.already_pending(REFINERY)) and
             self.can_afford(REFINERY) and self.units(REFINERY).amount < math.floor(self.time/60)*2):
-            for command_center in self.units(COMMANDCENTER).ready:
+            for command_center in self.get_command_centers().ready:
                 vaspenes = self.state.vespene_geyser.closer_than(10.0, command_center)
                 for vaspene in vaspenes:
                     if (not self.units(REFINERY).closer_than(1.0, vaspene).exists):
@@ -189,13 +193,16 @@ class MyBot(sc2.BotAI):
                         await self.train_unit_try(starport, VIKINGFIGHTER)
 
     async def expand(self):
-        if (self.units(COMMANDCENTER).amount < 4 and
+        if (self.get_command_centers().amount < 4 and
                     self.can_afford(COMMANDCENTER) and
-                    self.units(SCV).amount > self.units(COMMANDCENTER).amount*16):
+                    self.units(SCV).amount > self.get_command_centers().amount*16):
             await self.expand_now()
             await self.log("Expanding to new location")
 
     async def build_structures(self):
+        for cc in self.units(COMMANDCENTER).idle:
+                self.do(cc(UPGRADETOORBITAL_ORBITALCOMMAND))
+
         await self.build_more_barracks()
 
         await self.build_if_doesnt_exist(FACTORY)
