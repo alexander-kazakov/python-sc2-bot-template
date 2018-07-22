@@ -1,2 +1,2 @@
 # re-export
-from .main import MyBot
+from .main_bot import MyBot

@@ -17,6 +17,10 @@ import math
 # - Get MULEs going
 # - Use stimpack on marines when in attack and there is a medivac?
 
+# Fix training with reactor
+
+# Implement fast reload for easy testing
+
 # Change so that it builds if no queue
 #  for factory in self.units(FACTORY).ready.noqueue:
 
@@ -32,6 +36,12 @@ import math
 #     if mfs:
 #         mf = max(mfs, key=lambda x:x.mineral_contents)
 #         self.combinedActions.append(oc(AbilityId.CALLDOWNMULE_CALLDOWNMULE, mf))
+#
+# Add Reactors
+#         for sp in self.units(STARPORT).ready:
+            # if sp.add_on_tag == 0:
+            #     await self.do(sp.build(STARPORTTECHLAB))
+#
 #
 
 # HOW TO DEFINE BUILDING LOCATION
@@ -77,7 +87,6 @@ class MyBot(sc2.BotAI):
             await self.chat_send(f"I am a bot: {self.NAME}")
 
         self.iteration = iteration
-        self.time = (self.state.game_loop/22.4)
 
     def time_str(self):
         minutes = math.floor(self.time / 60)
@@ -96,6 +105,12 @@ class MyBot(sc2.BotAI):
         if self.can_afford(unit):
             await self.do(structure.train(unit))
             await self.log(f"Training {unit.name}")
+
+    def add_on_name(self,structure):
+        if structure.add_on_tag != 0:
+            return self.units.find_by_tag(structure.add_on_tag).name
+        else:
+            return "None"
 
 
 # -----  MAIN LOOP ----------------------------------------
@@ -155,19 +170,19 @@ class MyBot(sc2.BotAI):
                             return True
 
     async def train_army(self):
-        # Build 2 only if reactor?
-        # Teach to hold if a structure is beng built
         if self.supply_left > 1:
             for barrack in self.units(BARRACKS).ready:
-                if len(barrack.orders) < 2:
+                if ((len(barrack.orders) < 1) or
+                    (self.add_on_name(barrack) == "BarracksReactor" and len(barrack.orders) < 2)):
                     await self.train_unit_try(barrack, MARINE)
 
-            for factory in self.units(FACTORY).ready:
-                if len(factory.orders) < 1:
+            for factory in self.units(FACTORY).ready.noqueue:
+                if (self.add_on_name(factory) == "FactoryTechLab"):
                     await self.train_unit_try(factory, SIEGETANK)
 
-            for starport in self.units(STARPORT).ready:
-                if (len(starport.orders) < 1):
+            for starport in self.units(STARPORT).ready.noqueue:
+                if ((len(starport.orders) < 1) or
+                    (self.add_on_name(starport) == "StarportReactor" and len(starport.orders) < 2)):
                     if self.units(MEDIVAC).amount < self.MAX_MEDIVACS:
                         await self.train_unit_try(starport, MEDIVAC)
                     else:
@@ -185,8 +200,10 @@ class MyBot(sc2.BotAI):
 
         await self.build_if_doesnt_exist(FACTORY)
         await self.build_if_doesnt_exist(STARPORT)
-        await self.build_if_doesnt_exist(ENGINEERINGBAY)
-#        await self.build_if_doesnt_exist(ARMORY)
+
+        if self.time > 180:
+            await self.build_if_doesnt_exist(ENGINEERINGBAY)
+            await self.build_if_doesnt_exist(ARMORY)
 
     async def build_more_barracks(self):
         if (self.supply_left > 5 and not self.already_pending(BARRACKS) and
